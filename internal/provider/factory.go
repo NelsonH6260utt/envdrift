@@ -1,41 +1,62 @@
 package provider
 
 import (
-	"context"
 	"fmt"
 	"strings"
 )
 
-// Provider is the interface all cloud/env providers must satisfy.
-type Provider interface {
-	Name() string
-	FetchEnv(ctx context.Context, keys []string) (map[string]string, error)
-}
-
-// Config holds configuration for constructing a provider.
+// Config holds the parameters needed to construct a Provider.
 type Config struct {
-	Kind      string // "env", "aws", "gcp"
-	AWSPrefix string
+	// Type is one of: "env", "aws", "gcp", "gcp-runtime", "azure"
+	Type string
+
+	// Keys restricts which env vars are fetched. Empty means all.
+	Keys []string
+
+	// AWS / GCP / Azure shared
+	Prefix string
+
+	// AWS-specific
+	AWSRegion string
+
+	// GCP-specific
 	GCPProject string
-	GCPPrefix  string
+
+	// Azure-specific
+	AzureVaultURL string
 }
 
-// New constructs a Provider from the given Config.
+// New constructs a Provider from a Config.
 func New(cfg Config) (Provider, error) {
-	switch strings.ToLower(cfg.Kind) {
+	switch strings.ToLower(cfg.Type) {
 	case "env":
-		return NewEnvProvider(), nil
+		return NewEnvProvider(cfg.Keys), nil
+
 	case "aws":
-		if cfg.AWSPrefix == "" {
-			return nil, fmt.Errorf("provider: aws requires a non-empty prefix")
+		if cfg.Prefix == "" {
+			return nil, fmt.Errorf("factory: aws provider requires a prefix")
 		}
-		return NewAWSProvider(cfg.AWSPrefix)
+		return NewAWSProvider(cfg.Prefix, cfg.AWSRegion), nil
+
 	case "gcp":
 		if cfg.GCPProject == "" {
-			return nil, fmt.Errorf("provider: gcp requires a non-empty project")
+			return nil, fmt.Errorf("factory: gcp provider requires a project")
 		}
-		return NewGCPProvider(cfg.GCPProject, cfg.GCPPrefix)
+		return NewGCPProvider(cfg.GCPProject, cfg.Prefix)
+
+	case "gcp-runtime":
+		if cfg.GCPProject == "" {
+			return nil, fmt.Errorf("factory: gcp-runtime provider requires a project")
+		}
+		return NewGCPRuntimeProvider(cfg.GCPProject, cfg.Prefix)
+
+	case "azure":
+		if cfg.AzureVaultURL == "" {
+			return nil, fmt.Errorf("factory: azure provider requires a vaultURL")
+		}
+		return NewAzureProvider(cfg.AzureVaultURL, cfg.Prefix)
+
 	default:
-		return nil, fmt.Errorf("provider: unknown kind %q", cfg.Kind)
+		return nil, fmt.Errorf("factory: unknown provider type %q", cfg.Type)
 	}
 }
