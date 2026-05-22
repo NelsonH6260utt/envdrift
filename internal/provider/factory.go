@@ -3,34 +3,39 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
-// Config holds configuration for building a Provider via the factory.
-type Config struct {
-	// Type selects the provider: "env", "aws-ssm".
-	Type string
-
-	// Keys restricts which keys are fetched. Empty means all keys.
-	Keys []string
-
-	// EnvKeys is used by the "env" provider to specify which OS env vars to read.
-	EnvKeys []string
-
-	// AWSPathPrefix is the SSM parameter path prefix for the "aws-ssm" provider.
-	AWSPathPrefix string
+// Provider is the interface all cloud/env providers must satisfy.
+type Provider interface {
+	Name() string
+	FetchEnv(ctx context.Context, keys []string) (map[string]string, error)
 }
 
-// New builds a Provider from the given Config.
-func New(ctx context.Context, cfg Config) (Provider, error) {
-	switch cfg.Type {
+// Config holds configuration for constructing a provider.
+type Config struct {
+	Kind      string // "env", "aws", "gcp"
+	AWSPrefix string
+	GCPProject string
+	GCPPrefix  string
+}
+
+// New constructs a Provider from the given Config.
+func New(cfg Config) (Provider, error) {
+	switch strings.ToLower(cfg.Kind) {
 	case "env":
-		return NewEnvProvider(cfg.EnvKeys), nil
-	case "aws-ssm":
-		if cfg.AWSPathPrefix == "" {
-			return nil, fmt.Errorf("factory: aws-ssm requires AWSPathPrefix")
+		return NewEnvProvider(), nil
+	case "aws":
+		if cfg.AWSPrefix == "" {
+			return nil, fmt.Errorf("provider: aws requires a non-empty prefix")
 		}
-		return NewAWSProvider(ctx, cfg.AWSPathPrefix)
+		return NewAWSProvider(cfg.AWSPrefix)
+	case "gcp":
+		if cfg.GCPProject == "" {
+			return nil, fmt.Errorf("provider: gcp requires a non-empty project")
+		}
+		return NewGCPProvider(cfg.GCPProject, cfg.GCPPrefix)
 	default:
-		return nil, fmt.Errorf("factory: unknown provider type %q", cfg.Type)
+		return nil, fmt.Errorf("provider: unknown kind %q", cfg.Kind)
 	}
 }
