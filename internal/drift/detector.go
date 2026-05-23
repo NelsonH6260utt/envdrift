@@ -1,6 +1,9 @@
 package drift
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // DriftType describes the kind of configuration drift detected.
 type DriftType string
@@ -42,8 +45,20 @@ func (r *Report) HasDrift() bool {
 	return len(r.Entries) > 0
 }
 
+// ByType returns all drift entries that match the given DriftType.
+func (r *Report) ByType(dt DriftType) []DriftEntry {
+	var result []DriftEntry
+	for _, e := range r.Entries {
+		if e.Type == dt {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
 // Detect compares a local env map (from .env file) against a live env map
 // (from a cloud provider). Keys present in ignoreKeys are skipped.
+// The returned report's entries are sorted by key for deterministic output.
 func Detect(local, live map[string]string, ignoreKeys map[string]struct{}) *Report {
 	report := &Report{}
 
@@ -82,6 +97,10 @@ func Detect(local, live map[string]string, ignoreKeys map[string]struct{}) *Repo
 			})
 		}
 	}
+
+	sort.Slice(report.Entries, func(i, j int) bool {
+		return report.Entries[i].Key < report.Entries[j].Key
+	})
 
 	return report
 }
