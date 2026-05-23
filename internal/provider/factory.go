@@ -6,90 +6,94 @@ import (
 	"strings"
 )
 
-// Config holds the parameters used to construct a Provider via New.
+// Config holds the parameters needed to construct any supported provider.
 type Config struct {
-	Kind string
+	// Provider selects the backend: "env", "aws", "gcp", "gcp-runtime",
+	// "azure", "vault", "doppler", "github", "railway".
+	Provider string
+
+	// Shared / generic
+	Prefix string
+	Keys   []string
 
 	// AWS
-	AWSPrefix string
+	AWSRegion string
 
-	// GCP Secret Manager
+	// GCP
 	GCPProject string
-	GCPPrefix  string
 
-	// GCP Cloud Run / runtime config
-	GCPRuntimeProject string
-
-	// Azure Key Vault
+	// Azure
 	AzureVaultURL string
 
-	// HashiCorp Vault
+	// Vault
 	VaultAddr  string
+	VaultToken string
 	VaultMount string
 	VaultPath  string
-	VaultToken string
 
 	// Doppler
 	DopplerToken   string
 	DopplerProject string
 	DopplerConfig  string
 
-	// GitHub Actions
+	// GitHub
+	GitHubToken string
 	GitHubOwner string
 	GitHubRepo  string
-	GitHubEnv   string
-	GitHubToken string
+
+	// Railway
+	RailwayToken         string
+	RailwayProjectID     string
+	RailwayEnvironmentID string
 }
 
-// New constructs a Provider from the supplied Config.
+// New constructs the Provider described by cfg.
 func New(cfg Config) (Provider, error) {
-	switch strings.ToLower(cfg.Kind) {
+	switch strings.ToLower(cfg.Provider) {
 	case "env":
-		return NewEnvProvider(os.Environ()), nil
+		return NewEnvProvider(cfg.Keys), nil
 
 	case "aws":
-		if cfg.AWSPrefix == "" {
-			return nil, fmt.Errorf("factory: aws provider requires AWSPrefix")
+		if cfg.Prefix == "" {
+			return nil, fmt.Errorf("factory: aws provider requires a prefix")
 		}
-		return NewAWSProvider(cfg.AWSPrefix), nil
+		region := cfg.AWSRegion
+		if region == "" {
+			region = os.Getenv("AWS_REGION")
+		}
+		return NewAWSProvider(region, cfg.Prefix), nil
 
 	case "gcp":
 		if cfg.GCPProject == "" {
-			return nil, fmt.Errorf("factory: gcp provider requires GCPProject")
+			return nil, fmt.Errorf("factory: gcp provider requires a project")
 		}
-		return NewGCPProvider(cfg.GCPProject, cfg.GCPPrefix)
+		return NewGCPProvider(cfg.GCPProject, cfg.Prefix)
 
 	case "gcp-runtime":
-		if cfg.GCPRuntimeProject == "" {
-			return nil, fmt.Errorf("factory: gcp-runtime provider requires GCPRuntimeProject")
+		if cfg.GCPProject == "" {
+			return nil, fmt.Errorf("factory: gcp-runtime provider requires a project")
 		}
-		return NewGCPRuntimeProvider(cfg.GCPRuntimeProject)
+		return NewGCPRuntimeProvider(cfg.GCPProject, cfg.Prefix)
 
 	case "azure":
 		if cfg.AzureVaultURL == "" {
-			return nil, fmt.Errorf("factory: azure provider requires AzureVaultURL")
+			return nil, fmt.Errorf("factory: azure provider requires a vault URL")
 		}
-		return NewAzureProvider(cfg.AzureVaultURL)
+		return NewAzureProvider(cfg.AzureVaultURL, cfg.Prefix)
 
 	case "vault":
-		return NewVaultProvider(cfg.VaultAddr, cfg.VaultMount, cfg.VaultPath, cfg.VaultToken)
+		return NewVaultProvider(cfg.VaultAddr, cfg.VaultToken, cfg.VaultMount, cfg.VaultPath)
 
 	case "doppler":
 		return NewDopplerProvider(cfg.DopplerToken, cfg.DopplerProject, cfg.DopplerConfig)
 
 	case "github":
-		if cfg.GitHubOwner == "" {
-			return nil, fmt.Errorf("factory: github provider requires GitHubOwner")
-		}
-		if cfg.GitHubRepo == "" {
-			return nil, fmt.Errorf("factory: github provider requires GitHubRepo")
-		}
-		if cfg.GitHubToken == "" {
-			return nil, fmt.Errorf("factory: github provider requires GitHubToken")
-		}
-		return NewGitHubProvider(cfg.GitHubOwner, cfg.GitHubRepo, cfg.GitHubEnv, cfg.GitHubToken)
+		return NewGitHubProvider(cfg.GitHubToken, cfg.GitHubOwner, cfg.GitHubRepo)
+
+	case "railway":
+		return NewRailwayProvider(cfg.RailwayToken, cfg.RailwayProjectID, cfg.RailwayEnvironmentID)
 
 	default:
-		return nil, fmt.Errorf("factory: unknown provider kind %q", cfg.Kind)
+		return nil, fmt.Errorf("factory: unknown provider %q", cfg.Provider)
 	}
 }
