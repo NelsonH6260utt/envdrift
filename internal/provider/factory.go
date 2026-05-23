@@ -8,18 +8,17 @@ import (
 
 // Config holds the parameters needed to construct any supported provider.
 type Config struct {
-	// Provider selects the backend: "env", "aws", "gcp", "gcp-runtime",
-	// "azure", "vault", "doppler", "github", "railway".
-	Provider string
+	// Provider name: "env", "aws", "gcp", "gcp-runtime", "azure", "vault", "doppler", "github", "railway", "render"
+	Name string
 
 	// Shared / generic
-	Prefix string
 	Keys   []string
+	Prefix string
 
 	// AWS
 	AWSRegion string
 
-	// GCP
+	// GCP / GCP Runtime
 	GCPProject string
 
 	// Azure
@@ -42,14 +41,18 @@ type Config struct {
 	GitHubRepo  string
 
 	// Railway
-	RailwayToken         string
-	RailwayProjectID     string
-	RailwayEnvironmentID string
+	RailwayToken     string
+	RailwayProjectID string
+	RailwayEnvID     string
+
+	// Render
+	RenderServiceID string
+	RenderAPIKey    string
 }
 
-// New constructs the Provider described by cfg.
+// New constructs the appropriate Provider from a Config.
 func New(cfg Config) (Provider, error) {
-	switch strings.ToLower(cfg.Provider) {
+	switch strings.ToLower(cfg.Name) {
 	case "env":
 		return NewEnvProvider(cfg.Keys), nil
 
@@ -61,7 +64,7 @@ func New(cfg Config) (Provider, error) {
 		if region == "" {
 			region = os.Getenv("AWS_REGION")
 		}
-		return NewAWSProvider(region, cfg.Prefix), nil
+		return NewAWSProvider(region, cfg.Prefix)
 
 	case "gcp":
 		if cfg.GCPProject == "" {
@@ -91,9 +94,16 @@ func New(cfg Config) (Provider, error) {
 		return NewGitHubProvider(cfg.GitHubToken, cfg.GitHubOwner, cfg.GitHubRepo)
 
 	case "railway":
-		return NewRailwayProvider(cfg.RailwayToken, cfg.RailwayProjectID, cfg.RailwayEnvironmentID)
+		return NewRailwayProvider(cfg.RailwayToken, cfg.RailwayProjectID, cfg.RailwayEnvID)
+
+	case "render":
+		apiKey := cfg.RenderAPIKey
+		if apiKey == "" {
+			apiKey = os.Getenv("RENDER_API_KEY")
+		}
+		return NewRenderProvider(cfg.RenderServiceID, apiKey)
 
 	default:
-		return nil, fmt.Errorf("factory: unknown provider %q", cfg.Provider)
+		return nil, fmt.Errorf("factory: unknown provider %q", cfg.Name)
 	}
 }
