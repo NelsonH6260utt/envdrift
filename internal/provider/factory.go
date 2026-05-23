@@ -3,28 +3,26 @@ package provider
 import (
 	"fmt"
 	"os"
-	"strings"
 )
 
 // Config holds the parameters needed to construct any supported provider.
 type Config struct {
-	// Provider name: "env", "aws", "gcp", "gcp-runtime", "azure", "vault", "doppler", "github", "railway", "render"
 	Name string
 
-	// Shared / generic
-	Keys   []string
-	Prefix string
-
 	// AWS
-	AWSRegion string
+	AWSPrefix string
 
-	// GCP / GCP Runtime
+	// GCP Secret Manager
 	GCPProject string
+	GCPPrefix  string
 
-	// Azure
+	// GCP Cloud Run runtime config
+	GCPRuntimeProject string
+
+	// Azure Key Vault
 	AzureVaultURL string
 
-	// Vault
+	// HashiCorp Vault
 	VaultAddr  string
 	VaultToken string
 	VaultMount string
@@ -35,7 +33,7 @@ type Config struct {
 	DopplerProject string
 	DopplerConfig  string
 
-	// GitHub
+	// GitHub Actions
 	GitHubToken string
 	GitHubOwner string
 	GitHubRepo  string
@@ -43,46 +41,55 @@ type Config struct {
 	// Railway
 	RailwayToken     string
 	RailwayProjectID string
-	RailwayEnvID     string
+	RailwayServiceID string
 
 	// Render
+	RenderToken     string
 	RenderServiceID string
-	RenderAPIKey    string
+
+	// Fly.io
+	FlyioToken  string
+	FlyioAppID  string
+
+	// Vercel
+	VercelToken     string
+	VercelProjectID string
+	VercelTeamID    string
+
+	// Netlify
+	NetlifyToken  string
+	NetlifySiteID string
 }
 
-// New constructs the appropriate Provider from a Config.
+// New constructs the Provider identified by cfg.Name.
 func New(cfg Config) (Provider, error) {
-	switch strings.ToLower(cfg.Name) {
+	switch cfg.Name {
 	case "env":
-		return NewEnvProvider(cfg.Keys), nil
+		return NewEnvProvider(), nil
 
 	case "aws":
-		if cfg.Prefix == "" {
-			return nil, fmt.Errorf("factory: aws provider requires a prefix")
+		if cfg.AWSPrefix == "" {
+			return nil, fmt.Errorf("provider aws: aws_prefix is required")
 		}
-		region := cfg.AWSRegion
-		if region == "" {
-			region = os.Getenv("AWS_REGION")
-		}
-		return NewAWSProvider(region, cfg.Prefix)
+		return NewAWSProvider(cfg.AWSPrefix), nil
 
 	case "gcp":
 		if cfg.GCPProject == "" {
-			return nil, fmt.Errorf("factory: gcp provider requires a project")
+			return nil, fmt.Errorf("provider gcp: gcp_project is required")
 		}
-		return NewGCPProvider(cfg.GCPProject, cfg.Prefix)
+		return NewGCPProvider(cfg.GCPProject, cfg.GCPPrefix)
 
 	case "gcp-runtime":
-		if cfg.GCPProject == "" {
-			return nil, fmt.Errorf("factory: gcp-runtime provider requires a project")
+		if cfg.GCPRuntimeProject == "" {
+			return nil, fmt.Errorf("provider gcp-runtime: gcp_project is required")
 		}
-		return NewGCPRuntimeProvider(cfg.GCPProject, cfg.Prefix)
+		return NewGCPRuntimeProvider(cfg.GCPRuntimeProject)
 
 	case "azure":
 		if cfg.AzureVaultURL == "" {
-			return nil, fmt.Errorf("factory: azure provider requires a vault URL")
+			return nil, fmt.Errorf("provider azure: azure_vault_url is required")
 		}
-		return NewAzureProvider(cfg.AzureVaultURL, cfg.Prefix)
+		return NewAzureProvider(cfg.AzureVaultURL)
 
 	case "vault":
 		return NewVaultProvider(cfg.VaultAddr, cfg.VaultToken, cfg.VaultMount, cfg.VaultPath)
@@ -94,16 +101,29 @@ func New(cfg Config) (Provider, error) {
 		return NewGitHubProvider(cfg.GitHubToken, cfg.GitHubOwner, cfg.GitHubRepo)
 
 	case "railway":
-		return NewRailwayProvider(cfg.RailwayToken, cfg.RailwayProjectID, cfg.RailwayEnvID)
+		return NewRailwayProvider(cfg.RailwayToken, cfg.RailwayProjectID, cfg.RailwayServiceID)
 
 	case "render":
-		apiKey := cfg.RenderAPIKey
-		if apiKey == "" {
-			apiKey = os.Getenv("RENDER_API_KEY")
+		return NewRenderProvider(cfg.RenderToken, cfg.RenderServiceID)
+
+	case "flyio":
+		return NewFlyioProvider(cfg.FlyioToken, cfg.FlyioAppID)
+
+	case "vercel":
+		return NewVercelProvider(cfg.VercelToken, cfg.VercelProjectID, cfg.VercelTeamID)
+
+	case "netlify":
+		token := cfg.NetlifyToken
+		if token == "" {
+			token = os.Getenv("NETLIFY_TOKEN")
 		}
-		return NewRenderProvider(cfg.RenderServiceID, apiKey)
+		siteID := cfg.NetlifySiteID
+		if siteID == "" {
+			siteID = os.Getenv("NETLIFY_SITE_ID")
+		}
+		return NewNetlifyProvider(token, siteID)
 
 	default:
-		return nil, fmt.Errorf("factory: unknown provider %q", cfg.Name)
+		return nil, fmt.Errorf("provider %q is not supported", cfg.Name)
 	}
 }
